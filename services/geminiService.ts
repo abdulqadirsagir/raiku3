@@ -1,23 +1,23 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Difficulty, QuizQuestion } from '../types';
 import { QUESTION_COUNT, RAIKU_CONTEXT, FALLBACK_QUESTIONS, SPECIAL_HARD_QUESTIONS } from '../constants';
-import { API_KEY } from '../config'; // <-- IMPORT THE KEY HERE
 
 /**
  * Lazily initializes and returns a GoogleGenAI instance.
  * Throws an error if the API key is not available.
  */
 const getAiClient = () => {
-  if (!API_KEY || API_KEY === "PASTE_YOUR_GEMINI_API_KEY_HERE") {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
     throw new Error("API_KEY_MISSING");
   }
-  return new GoogleGenAI({ apiKey: API_KEY });
+  return new GoogleGenAI({ apiKey });
 };
 
 const handleApiError = (error: unknown): string => {
     console.error("Error connecting to Gemini API:", error);
     if (error instanceof Error && error.message === "API_KEY_MISSING") {
-        return "Error: API_KEY is not configured. Make sure you have a config.ts file with your key.";
+        return "Error: API_KEY is not configured. Please check your environment variables.";
     }
     return "Sorry, there was an error connecting to the AI service. Please try again later.";
 };
@@ -37,7 +37,7 @@ export const getRaikuAnswer = async (query: string): Promise<string> => {
       contents: prompt,
     });
 
-    return response.text.trim();
+    return (response.text || "").trim();
   } catch (error) {
     return handleApiError(error);
   }
@@ -74,7 +74,7 @@ const generateHardQuizWithSpecialQuestions = async (): Promise<QuizQuestion[]> =
             },
         });
 
-        const jsonString = response.text.trim();
+        const jsonString = (response.text || "").trim();
         const generatedQuestions = JSON.parse(jsonString);
 
         if (generatedQuestions && generatedQuestions.length === questionsToGenerate) {
@@ -105,8 +105,6 @@ export const generateQuizQuestions = async (difficulty: Difficulty): Promise<Qui
   try {
      getAiClient(); // Check for API key early
   } catch (error) {
-      // If the key is missing, immediately return fallback questions
-      // The user will see a proper error when they try to use the search box.
       console.error("API Key is missing, using fallback questions for the quiz.");
       return FALLBACK_QUESTIONS;
   }
@@ -152,7 +150,7 @@ export const generateQuizQuestions = async (difficulty: Difficulty): Promise<Qui
       },
     });
 
-    const jsonString = response.text.trim();
+    const jsonString = (response.text || "").trim();
     const questions = JSON.parse(jsonString);
     if (questions && questions.length === QUESTION_COUNT) {
         return questions;

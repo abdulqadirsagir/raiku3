@@ -9,13 +9,27 @@ interface AuthProps {
 export const Auth: React.FC<AuthProps> = ({ session }) => {
   const handleLogin = async () => {
     try {
+      // Get the current URL to ensure we redirect back here
+      // This handles both localhost and Vercel deployments dynamically
+      const currentUrl = typeof window !== 'undefined' ? window.location.origin : undefined;
+
+      console.log('Initiating Discord login, redirecting to:', currentUrl);
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'discord',
+        options: {
+          redirectTo: currentUrl, 
+        },
       });
       if (error) throw error;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error logging in:', error);
-      alert('Error logging in with Discord');
+      
+      if (error.msg && error.msg.includes('provider is not enabled')) {
+        alert('Login failed: Discord authentication is not enabled in the Supabase Dashboard.\n\nPlease go to Authentication -> Providers -> Discord and flip the "Enable" switch.');
+      } else {
+        alert('Error logging in with Discord. Please check the console for details.');
+      }
     }
   };
 
@@ -34,8 +48,10 @@ export const Auth: React.FC<AuthProps> = ({ session }) => {
     );
   }
 
-  const avatarUrl = session.user.user_metadata.avatar_url;
-  const username = session.user.user_metadata.full_name || session.user.user_metadata.name || session.user.email;
+  // Handle potential missing metadata structure safely
+  const meta = session?.user?.user_metadata || {};
+  const avatarUrl = meta.avatar_url;
+  const username = meta.full_name || meta.name || session.user.email;
 
   return (
     <div className="flex items-center gap-4">
