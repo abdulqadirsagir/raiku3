@@ -5,10 +5,13 @@ export interface QuizQuestion {
 }
 
 export interface LeaderboardEntry {
-  rank: number;
+  id: string;
   username: string;
+  avatar_url?: string;
   score: number;
   difficulty: Difficulty;
+  last_played?: string;
+  rank?: number;
 }
 
 export enum Difficulty {

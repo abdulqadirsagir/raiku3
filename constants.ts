@@ -42,10 +42,10 @@ export const SPECIAL_HARD_QUESTIONS: QuizQuestion[] = [
 
 
 export const DUMMY_LEADERBOARD: LeaderboardEntry[] = [
-  { rank: 1, username: 'cypher_god', score: 90, difficulty: Difficulty.Hard },
-  { rank: 2, username: 'solana_maxi', score: 80, difficulty: Difficulty.Challenging },
-  { rank: 3, username: 'degen_trader', score: 70, difficulty: Difficulty.Simple },
-  { rank: 4, username: 'rust_ace', score: 60, difficulty: Difficulty.Hard },
+  { id: '1', rank: 1, username: 'cypher_god', score: 90, difficulty: Difficulty.Hard },
+  { id: '2', rank: 2, username: 'solana_maxi', score: 80, difficulty: Difficulty.Challenging },
+  { id: '3', rank: 3, username: 'degen_trader', score: 70, difficulty: Difficulty.Simple },
+  { id: '4', rank: 4, username: 'rust_ace', score: 60, difficulty: Difficulty.Hard },
 ];
 
 export const FALLBACK_QUESTIONS: QuizQuestion[] = [

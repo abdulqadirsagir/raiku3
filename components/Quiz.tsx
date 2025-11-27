@@ -4,14 +4,16 @@ import { generateQuizQuestions } from '../services/geminiService';
 import { DIFFICULTY_LEVELS, QUESTION_COUNT, FALLBACK_QUESTIONS } from '../constants';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
+import { supabase } from '../supabase';
 
 type GameState = 'idle' | 'loading' | 'info' | 'playing' | 'timesup' | 'finished';
 
 interface QuizProps {
-  onQuizComplete: (result: { username: string; score: number; difficulty: Difficulty }) => void;
+  session: any;
+  onScoreUpdate: () => void;
 }
 
-export const Quiz: React.FC<QuizProps> = ({ onQuizComplete }) => {
+export const Quiz: React.FC<QuizProps> = ({ session, onScoreUpdate }) => {
   const [gameState, setGameState] = useState<GameState>('idle');
   const [difficulty, setDifficulty] = useState<Difficulty | null>(null);
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
@@ -19,10 +21,10 @@ export const Quiz: React.FC<QuizProps> = ({ onQuizComplete }) => {
   const [userAnswers, setUserAnswers] = useState<number[]>([]);
   const [score, setScore] = useState(0);
   const [timeLeft, setTimeLeft] = useState(0);
-  const [username, setUsername] = useState('');
   const [animate, setAnimate] = useState(false);
+  const [clickedIndex, setClickedIndex] = useState<number | null>(null);
 
-  const finishGame = useCallback(() => {
+  const finishGame = useCallback(async () => {
     let finalScore = 0;
     questions.forEach((q, index) => {
       if (q.correctAnswerIndex === -1 || q.correctAnswerIndex === userAnswers[index]) {
@@ -31,7 +33,27 @@ export const Quiz: React.FC<QuizProps> = ({ onQuizComplete }) => {
     });
     setScore(finalScore);
     setGameState('finished');
-  }, [questions, userAnswers]);
+
+    if (session) {
+      const user = session.user;
+      const updates = {
+        id: user.id,
+        username: user.user_metadata.full_name || user.user_metadata.name || user.email,
+        avatar_url: user.user_metadata.avatar_url,
+        score: finalScore,
+        difficulty: difficulty,
+        last_played: new Date(),
+      };
+
+      try {
+        const { error } = await supabase.from('leaderboard').upsert(updates);
+        if (error) throw error;
+        onScoreUpdate();
+      } catch (error) {
+        console.error('Error saving score:', error);
+      }
+    }
+  }, [questions, userAnswers, session, difficulty, onScoreUpdate]);
 
   useEffect(() => {
     if (gameState === 'playing' && timeLeft > 0) {
@@ -48,7 +70,7 @@ export const Quiz: React.FC<QuizProps> = ({ onQuizComplete }) => {
     if (gameState === 'timesup') {
       const timerId = setTimeout(() => {
         finishGame();
-      }, 2500); // Show "Time's Up" for 2.5 seconds
+      }, 2500);
       return () => clearTimeout(timerId);
     }
   }, [gameState, finishGame]);
@@ -60,7 +82,7 @@ export const Quiz: React.FC<QuizProps> = ({ onQuizComplete }) => {
         const fetchedQuestions = await generateQuizQuestions(selectedDifficulty);
         setQuestions(fetchedQuestions);
     } catch {
-        setQuestions(FALLBACK_QUESTIONS); // fallback on error
+        setQuestions(FALLBACK_QUESTIONS);
     } finally {
         setGameState('info');
     }
@@ -74,15 +96,18 @@ export const Quiz: React.FC<QuizProps> = ({ onQuizComplete }) => {
     setTimeLeft(DIFFICULTY_LEVELS[difficulty].time);
     setGameState('playing');
     setAnimate(true);
+    setClickedIndex(null);
   };
 
   const handleAnswer = (answerIndex: number) => {
+    setClickedIndex(answerIndex);
     const newAnswers = [...userAnswers];
     newAnswers[currentQuestionIndex] = answerIndex;
     setUserAnswers(newAnswers);
   };
 
   const handleNextQuestion = () => {
+    setClickedIndex(null);
     if (currentQuestionIndex < questions.length - 1) {
       setAnimate(false);
       setTimeout(() => {
@@ -94,19 +119,11 @@ export const Quiz: React.FC<QuizProps> = ({ onQuizComplete }) => {
     }
   };
 
-  const submitScore = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (username.trim() && difficulty) {
-      onQuizComplete({ username, score, difficulty });
-      resetGame();
-    }
-  };
-
   const resetGame = () => {
     setGameState('idle');
     setDifficulty(null);
     setQuestions([]);
-    setUsername('');
+    setClickedIndex(null);
   };
 
   const formatTime = (seconds: number) => {
@@ -121,7 +138,14 @@ export const Quiz: React.FC<QuizProps> = ({ onQuizComplete }) => {
         return (
           <div className="text-center">
             <h2 className="text-3xl md:text-4xl font-mono font-bold mb-6 text-raiku-lime">Raiku Knowledge Challenge</h2>
-            <p className="mb-8 text-gray-300">Test your knowledge. Choose your difficulty.</p>
+            {!session ? (
+              <div className="mb-8 p-4 bg-gray-800/50 rounded-lg border border-neon-pink/50">
+                 <p className="text-gray-300">Please sign in with Discord (top right) to save your score to the leaderboard!</p>
+              </div>
+            ) : (
+                <p className="mb-8 text-gray-300">Ready, {session.user.user_metadata.full_name}? Choose your difficulty.</p>
+            )}
+            
             <div className="flex flex-col sm:flex-row justify-center gap-4">
               <Button onClick={() => loadQuestions(Difficulty.Simple)}>Simple</Button>
               <Button onClick={() => loadQuestions(Difficulty.Challenging)}>Challenging</Button>
@@ -164,7 +188,7 @@ export const Quiz: React.FC<QuizProps> = ({ onQuizComplete }) => {
                         userAnswers[currentQuestionIndex] === index
                         ? 'border-raiku-lime bg-raiku-lime/20'
                         : 'border-gray-600 hover:border-raiku-lime hover:bg-raiku-lime/10'
-                    }`}
+                    } ${clickedIndex === index ? 'animate-option-select' : ''}`}
                     >
                     {option}
                     </button>
@@ -187,49 +211,26 @@ export const Quiz: React.FC<QuizProps> = ({ onQuizComplete }) => {
           </div>
         );
       case 'finished':
-        let resultTheme: { title: string; colorClass: string; emoji: string; buttonVariant: 'primary' | 'secondary' | 'success'; inputFocusClass: string; };
+        let resultTheme: { title: string; colorClass: string; emoji: string; buttonVariant: 'primary' | 'secondary' | 'success'; };
 
         if (score <= 3) {
-            resultTheme = {
-                title: 'Better Luck Next Time!',
-                colorClass: 'text-neon-pink',
-                emoji: '😔',
-                buttonVariant: 'secondary',
-                inputFocusClass: 'focus:border-neon-pink focus:ring-neon-pink'
-            };
+            resultTheme = { title: 'Better Luck Next Time!', colorClass: 'text-neon-pink', emoji: '😔', buttonVariant: 'secondary' };
         } else if (score <= 6) {
-            resultTheme = {
-                title: 'Good Effort!',
-                colorClass: 'text-raiku-lime',
-                emoji: '🙂',
-                buttonVariant: 'primary',
-                inputFocusClass: 'focus:border-raiku-lime focus:ring-raiku-lime'
-            };
+            resultTheme = { title: 'Good Effort!', colorClass: 'text-raiku-lime', emoji: '🙂', buttonVariant: 'primary' };
         } else {
-            resultTheme = {
-                title: 'Quiz Complete!',
-                colorClass: 'text-raiku-lime',
-                emoji: '⚡️😄',
-                buttonVariant: 'success',
-                inputFocusClass: 'focus:border-raiku-lime focus:ring-raiku-lime'
-            };
+            resultTheme = { title: 'Quiz Complete!', colorClass: 'text-raiku-lime', emoji: '⚡️😄', buttonVariant: 'success' };
         }
 
         return (
             <div className="text-center">
                 <h2 className={`text-3xl md:text-4xl font-mono font-bold mb-4 ${resultTheme.colorClass}`}>{resultTheme.title} {resultTheme.emoji}</h2>
                 <p className="text-2xl mb-6">Your Score: <span className={`font-bold ${resultTheme.colorClass}`}>{score}/{questions.length}</span></p>
-                <form onSubmit={submitScore} className="flex flex-col sm:flex-row gap-4 max-w-md mx-auto">
-                <input
-                    type="text"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    placeholder="Enter Discord Username"
-                    className={`flex-grow bg-gray-800/50 border-2 border-gray-600 rounded-md px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-1 transition-colors ${resultTheme.inputFocusClass}`}
-                />
-                <Button type="submit" variant={resultTheme.buttonVariant}>Add to Leaderboard</Button>
-                </form>
-                 <button onClick={resetGame} className="mt-4 text-gray-400 hover:text-raiku-lime transition-colors">Play Again</button>
+                {session ? (
+                    <p className="text-gray-400 mb-6">Score saved to leaderboard!</p>
+                ) : (
+                    <p className="text-neon-pink mb-6">Sign in to save your score!</p>
+                )}
+                <Button onClick={resetGame} variant={resultTheme.buttonVariant}>Play Again</Button>
             </div>
         );
       default:

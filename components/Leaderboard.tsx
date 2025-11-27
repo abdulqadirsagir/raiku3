@@ -14,7 +14,11 @@ const difficultyButtonClasses = (isActive: boolean) =>
 export const Leaderboard: React.FC<LeaderboardProps> = ({ data }) => {
   const [activeFilter, setActiveFilter] = useState<Difficulty>(Difficulty.Hard);
 
-  const filteredData = data.filter(entry => entry.difficulty === activeFilter);
+  // Filter and sort data
+  const filteredData = data
+    .filter(entry => entry.difficulty === activeFilter)
+    .sort((a, b) => b.score - a.score)
+    .map((entry, index) => ({ ...entry, rank: index + 1 }));
   
   return (
     <section id="leaderboard" className="flex flex-col items-center">
@@ -38,7 +42,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ data }) => {
             <thead className="text-gray-400 uppercase tracking-wider text-sm border-b-2 border-gray-700">
               <tr>
                 <th className="p-4">Rank</th>
-                <th className="p-4">Username</th>
+                <th className="p-4">User</th>
                 <th className="p-4 text-right">Score</th>
               </tr>
             </thead>
@@ -46,7 +50,12 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ data }) => {
               {filteredData.length > 0 ? filteredData.map((entry, index) => (
                 <tr key={index} className="border-b border-gray-800 last:border-b-0 hover:bg-gray-800/50 transition-colors">
                   <td className={`p-4 font-bold ${entry.rank === 1 ? 'text-raiku-lime' : ''}`}>{entry.rank}</td>
-                  <td className="p-4">{entry.username}</td>
+                  <td className="p-4 flex items-center gap-3">
+                    {entry.avatar_url && (
+                        <img src={entry.avatar_url} alt={entry.username} className="w-8 h-8 rounded-full border border-gray-600" />
+                    )}
+                    <span>{entry.username}</span>
+                  </td>
                   <td className="p-4 text-right font-bold text-lg text-white">{entry.score}</td>
                 </tr>
               )) : (
