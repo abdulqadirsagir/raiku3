@@ -5,7 +5,7 @@ import { DIFFICULTY_LEVELS, QUESTION_COUNT, FALLBACK_QUESTIONS } from '../consta
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 
-type GameState = 'idle' | 'loading' | 'info' | 'playing' | 'finished';
+type GameState = 'idle' | 'loading' | 'info' | 'playing' | 'timesup' | 'finished';
 
 interface QuizProps {
   onQuizComplete: (result: { username: string; score: number; difficulty: Difficulty }) => void;
@@ -22,6 +22,17 @@ export const Quiz: React.FC<QuizProps> = ({ onQuizComplete }) => {
   const [username, setUsername] = useState('');
   const [animate, setAnimate] = useState(false);
 
+  const finishGame = useCallback(() => {
+    let finalScore = 0;
+    questions.forEach((q, index) => {
+      if (q.correctAnswerIndex === -1 || q.correctAnswerIndex === userAnswers[index]) {
+        finalScore += 1;
+      }
+    });
+    setScore(finalScore);
+    setGameState('finished');
+  }, [questions, userAnswers]);
+
   useEffect(() => {
     if (gameState === 'playing' && timeLeft > 0) {
       const timerId = setInterval(() => {
@@ -29,9 +40,18 @@ export const Quiz: React.FC<QuizProps> = ({ onQuizComplete }) => {
       }, 1000);
       return () => clearInterval(timerId);
     } else if (gameState === 'playing' && timeLeft === 0) {
-      finishGame();
+      setGameState('timesup');
     }
   }, [gameState, timeLeft]);
+  
+  useEffect(() => {
+    if (gameState === 'timesup') {
+      const timerId = setTimeout(() => {
+        finishGame();
+      }, 2500); // Show "Time's Up" for 2.5 seconds
+      return () => clearTimeout(timerId);
+    }
+  }, [gameState, finishGame]);
 
   const loadQuestions = async (selectedDifficulty: Difficulty) => {
     setGameState('loading');
@@ -55,18 +75,6 @@ export const Quiz: React.FC<QuizProps> = ({ onQuizComplete }) => {
     setGameState('playing');
     setAnimate(true);
   };
-  
-  const finishGame = useCallback(() => {
-    let finalScore = 0;
-    questions.forEach((q, index) => {
-      if (q.correctAnswerIndex === -1 || q.correctAnswerIndex === userAnswers[index]) {
-        finalScore += 1;
-      }
-    });
-    setScore(finalScore);
-    setGameState('finished');
-  }, [questions, userAnswers]);
-
 
   const handleAnswer = (answerIndex: number) => {
     const newAnswers = [...userAnswers];
@@ -137,7 +145,12 @@ export const Quiz: React.FC<QuizProps> = ({ onQuizComplete }) => {
         return (
           <div className={`transition-all duration-300 ease-in-out ${animate ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-8'}`}>
             <div className="flex justify-between items-center mb-4 font-mono text-lg">
-              <div className="text-raiku-lime">Question {currentQuestionIndex + 1}/{questions.length}</div>
+              <div className="flex items-center gap-3">
+                <div className="text-raiku-lime">Question {currentQuestionIndex + 1}/{questions.length}</div>
+                <span className={`px-2 py-0.5 text-xs font-bold uppercase rounded-full ${difficulty === Difficulty.Hard ? 'bg-neon-pink text-black' : 'bg-raiku-lime text-black'}`}>
+                  {difficulty}
+                </span>
+              </div>
               <div className="text-neon-pink">{formatTime(timeLeft)}</div>
             </div>
             <div className="bg-black/50 p-6 rounded-md border border-gray-700">
@@ -163,6 +176,14 @@ export const Quiz: React.FC<QuizProps> = ({ onQuizComplete }) => {
                 {currentQuestionIndex < questions.length - 1 ? 'Next Question' : 'Finish'}
               </Button>
             </div>
+          </div>
+        );
+       case 'timesup':
+        return (
+          <div className="text-center">
+            <h2 className="text-5xl md:text-6xl font-mono font-bold text-neon-pink drop-shadow-[0_0_15px_rgba(255,0,255,0.8)] animate-times-up-pulse">
+                TIME'S UP!
+            </h2>
           </div>
         );
       case 'finished':

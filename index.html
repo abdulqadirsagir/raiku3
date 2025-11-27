@@ -31,10 +31,15 @@
               'grid-pan': {
                 '0%': { backgroundPosition: '0% 0%' },
                 '100%': { backgroundPosition: '50px 50px' },
+              },
+              'times-up-pulse': {
+                '0%, 100%': { transform: 'scale(1)', opacity: 0.8 },
+                '50%': { transform: 'scale(1.05)', opacity: 1 },
               }
             },
             animation: {
               'grid-pan': 'grid-pan 4s linear infinite',
+              'times-up-pulse': 'times-up-pulse 1.5s ease-in-out infinite',
             }
           }
         }
